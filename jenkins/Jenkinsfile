@@ -1,0 +1,114 @@
+def pipelineContext = [:]
+
+def dynamicDbPort = '0'
+
+pipeline {
+    agent any
+
+    environment {
+        DB_HOST = 'mysql'
+        DB_PORT = '0'
+        DB_NAME = 'REDACTED'
+        DB_USER = 'admin'
+        DB_PASS = 'admin'
+    }
+
+    stages {
+        stage('Checkout Codebase') {
+            steps {
+                cleanWs()
+                checkout scm: [$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[credentialsId: 'REDACTED', url: 'git@github.com:REDACTED/REDACTED.git']]]
+            }
+        }
+
+        stage('Create Docker Image') {
+            steps {
+                script {
+                    pipelineContext.dockerImage = docker.image('mysql:8.0')
+                }
+            }
+        }
+
+        stage('Start Docker Container') {
+            steps {
+                script {
+                    pipelineContext.dockerContainer = pipelineContext.dockerImage.run("-e MYSQL_ROOT_PASSWORD=${DB_PASS} -e MYSQL_USER=${DB_USER} -e MYSQL_PASSWORD=${DB_PASS} --name mysql-${BUILD_NUMBER} -p 0:3306 -d")
+
+                    def host_port = sh(returnStdout: true, script: "docker port mysql-${BUILD_NUMBER} 3306 | cut -d ':' -f 2").trim()
+                    dynamicDbPort = host_port
+                    echo "Build number: ${dynamicDbPort}"
+
+                    retry(10) {
+                        sleep(5)
+                        sh "mysql --user=${DB_USER} --password=${DB_PASS} --host=127.0.0.1 --port=${dynamicDbPort} --execute=\"SELECT 1;\""
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                withMaven {
+                    sh 'mvn clean test org.jacoco:jacoco-maven-plugin:prepare-agent install'
+                }
+            }
+            post {
+                always {
+                    junit(
+                            allowEmptyResults: true,
+                            testResults: '**/surefire-reports/*.xml'
+                    )
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def mvn = tool 'Default Maven'
+                    withSonarQubeEnv() {
+                        sh "${mvn}/bin/mvn sonar:sonar -Dsonar.projectKey=REDACTED -Dsonar.projectName='REDACTED' -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml"
+                    }
+                }
+            }
+        }
+
+    }
+
+    post {
+        always {
+            echo 'Stop Docker image'
+            script {
+                if (pipelineContext && pipelineContext.dockerContainer) {
+                    pipelineContext.dockerContainer.stop()
+                }
+            }
+        }
+
+            failure {
+            sendStatusEmail('REDACTED@gmail.com.tr', 'FAILED')
+            slackSend channel: 'REDACTED', message: "*REDACTED*, Build of $env.GIT_BRANCH *FAILED*! :sob: Details: $env.BUILD_URL"
+
+        }
+
+        success {
+            sendStatusEmail('REDACTED@gmail.com.tr', 'SUCCESSFUL')
+            slackSend channel: 'REDACTED', message: "*REDACTED*, Build of $env.GIT_BRANCH was *SUCCESSFUL*! :tada: Details: $env.BUILD_URL"
+
+        }
+    }
+
+}
+
+def sendStatusEmail(emailAddress, status) {
+    renderStatus = status == 'SUCCESSFUL' ? "<b style='color:#008000'>$status</b>" : "<b style='color:#FF0000'>$status</b>"
+    mail from: 'Jenkins <REDACTED@gmail.com.tr>',
+            to: emailAddress,
+            mimeType: 'text/html',
+            charset: 'UTF-8',
+            subject: "[REDACTED_backend] Build of $env.GIT_BRANCH was $status",
+            body: """
+            <b>REDACTED_backend</b> Build <b>#$env.BUILD_NUMBER</b> of <b>$env.GIT_BRANCH</b> for commit $env.GIT_COMMIT was $renderStatus on <b>$env.NODE_NAME</b>.</br>
+            Details: $env.BUILD_URL
+        """.stripIndent()
+}
