@@ -4,6 +4,13 @@ Collection of my DevOps projects
 
 <br/>
 
+## [Docker Compose Next.js & Express](./mern-docker/README.MD)
+
+I tried to run my MERN stack application ([BeeMusic](https://github.com/kutaui/BeeMusic)) with 
+docker compose in my Azure VM.
+
+<br/>
+
 ## [Jenkins & Sonarqube Pipeline](./jenkins/README.MD)
 
 Jenkins & Sonarqube pipeline for a Maven project. Jacoco is used for code coverage and the 

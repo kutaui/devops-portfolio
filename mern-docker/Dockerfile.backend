@@ -1,0 +1,16 @@
+FROM node:21
+
+WORKDIR /app
+
+COPY . .
+
+COPY .env .
+
+RUN npm install
+
+# My npm run build command runs "npm install && tsc -p ."
+RUN npm run build
+
+EXPOSE 4001
+
+CMD ["npm", "start"]
