@@ -1,0 +1,59 @@
+---
+- hosts: webserver
+  become: yes
+  tasks:
+    - name: Install Node.js
+      apt:
+        name: nodejs
+        state: present
+      ignore_errors: yes
+
+    - name: Install NGINX
+      apt:
+        name: nginx
+        state: present
+      ignore_errors: yes
+
+    - name: Start NGINX service
+      service:
+        name: nginx
+        state: started
+      register: nginx_start
+      until: nginx_start.state == 'started'
+      retries: 5
+      delay: 10
+
+    - name: Copy NGINX configuration file
+      copy:
+        src: /path/to/local/default
+        dest: /etc/nginx/sites-available/default
+      ignore_errors: yes
+
+    - name: Copy html file
+      copy:
+        src: /path/to/local/index.html
+        dest: /var/www/html/index.html
+      ignore_errors: yes
+
+    # or if we want to host a Node.js app we can use reverse proxy with this config
+    - name: Copy NGINX configuration file
+      copy:
+        src: /path/to/local/nextjs.conf
+        dest: /etc/nginx/sites-available/nextjs.conf
+      ignore_errors: yes
+
+    - name: Create a symbolic link
+      file:
+        src: /etc/nginx/sites-available/nextjs.conf
+        dest: /etc/nginx/sites-enabled/nextjs.conf
+        state: link
+      ignore_errors: yes
+
+    - name: Restart NGINX service
+      service:
+        name: nginx
+        state: restarted
+      register: nginx_restart
+      until: nginx_restart.state == 'restarted'
+      retries: 5
+      delay: 10
